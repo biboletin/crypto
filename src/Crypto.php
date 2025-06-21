@@ -38,18 +38,19 @@ class Crypto
     private int $ivLength;
 
     /**
-     * The initialization vector (IV) used for encryption.
-     *
-     * @var string
-     */
-    private string $iv;
-
-    /**
      * The salt used for key derivation.
      *
-     * @var string
+     * @var int
      */
-    private const SALT = '_biboletin';
+    private const int SALT_LENGTH = 16;
+
+    /**
+     * The length of the HMAC key used for integrity verification.
+     * This is set to 32 bytes, which is standard for SHA-256 HMAC.
+     *
+     * @var int
+     */
+    private const int HMAC_LENGTH = 32;
 
     /**
      * The length of the authentication tag for GCM mode.
@@ -57,7 +58,9 @@ class Crypto
      *
      * @var int
      */
-    private const TAG_LENGTH = 16;
+    private const int TAG_LENGTH = 16;
+
+    private bool $useHmac;
 
     /**
      * Crypto constructor.
@@ -65,23 +68,18 @@ class Crypto
      * Initializes the Crypto instance with a key, optional salt, cipher algorithm, and IV length.
      *
      * @param string          $key             The encryption key.
-     * @param string|null     $salt            Optional salt for key derivation. Defaults to a predefined salt.
      * @param CipherAlgorithm $cipherAlgorithm The cipher algorithm to use for encryption and decryption.
      * @param int             $ivLength        The length of the initialization vector (IV) in bytes. Defaults to 16.
-     *
-     * @throws InvalidArgumentException|RandomException If the provided cipher algorithm is not supported.
      */
     public function __construct(
         string $key,
-        ?string $salt = null,
         CipherAlgorithm $cipherAlgorithm = CipherAlgorithm::AES_256_GCM,
-        int $ivLength = 16
+        int $ivLength = 16,
+        bool $useHmac = true
     ) {
-        $salt = $salt ?? self::SALT;
         $this->key = $key;
         $this->cipherAlgorithm = $cipherAlgorithm;
         $this->ivLength = $ivLength;
-        $this->iv = random_bytes($this->ivLength);
 
         if (!in_array($this->cipherAlgorithm->value, openssl_get_cipher_methods(true))) {
             throw new InvalidArgumentException(
@@ -89,8 +87,8 @@ class Crypto
             );
         }
 
-        $this->key = hash_pbkdf2('sha256', $this->key, $salt, $this->ivLength, true);
         $this->ivLength = openssl_cipher_iv_length($this->cipherAlgorithm->value);
+        $this->useHmac = $useHmac;
     }
 
     /**
@@ -103,25 +101,48 @@ class Crypto
      */
     public function encrypt(string $text): string
     {
+        // Salt for PBKDF2
+        $salt = random_bytes(self::SALT_LENGTH);
+        // IV for encryption
         $iv = random_bytes($this->ivLength);
         $tag = '';
 
+        $key = hash_pbkdf2('sha256', $this->key, $salt, 100_000, 32, true);
         $encryptedText = openssl_encrypt(
             $text,
             $this->cipherAlgorithm->value,
-            $this->key,
+            $key,
             OPENSSL_RAW_DATA,
             $iv,
-            $tag
+            $tag,
+            '',
+            self::TAG_LENGTH
         );
 
         if ($encryptedText === false) {
             throw new EncryptException('Encryption failed: ' . openssl_error_string());
         }
 
-        $payload = base64_encode($iv . $tag . $encryptedText);
+        // Format: salt|iv|tag|ciphertext
+        $payload = $salt . $iv . $tag . $encryptedText;
 
-        return CryptoVersion::V1->value . ':' . $payload;
+        if ($this->useHmac) {
+            // Ensure the HMAC is calculated over the entire formatted string
+            $hmacKey = hash_pbkdf2(
+                'sha256',
+                $this->key,
+                $salt . 'hmac',
+                100_000,
+                self::HMAC_LENGTH,
+                true
+            );
+
+            // HMAC added for integrity
+            $hmac = hash_hmac('sha256', $payload, $hmacKey, true);
+            $payload .= $hmac;
+        }
+
+        return CryptoVersion::V1->value . ':' . base64_encode($payload);
     }
 
     /**
@@ -140,18 +161,51 @@ class Crypto
         }
 
         $data = base64_decode($payload, true);
-
-        if ($data === false || strlen($data) < $this->ivLength + self::TAG_LENGTH) {
+        if ($data === false) {
             return null;
         }
 
-        $iv = substr($data, 0, $this->ivLength);
-        $tag = substr($data, $this->ivLength, self::TAG_LENGTH);
-        $encryptedText = substr($data, $this->ivLength + self::TAG_LENGTH);
+        $minLength = self::SALT_LENGTH + $this->ivLength + self::TAG_LENGTH;
+        if ($this->useHmac) {
+            $minLength += self::HMAC_LENGTH;
+        }
+
+        if (strlen($data) < $minLength) {
+            return null;
+        }
+
+        // Extract salt, IV, tag
+        $offset = 0;
+        $salt = substr($data, $offset, self::SALT_LENGTH);
+        $offset += self::SALT_LENGTH;
+
+        $iv = substr($data, $offset, $this->ivLength);
+        $offset += $this->ivLength;
+
+        $tag = substr($data, $offset, self::TAG_LENGTH);
+        $offset += self::TAG_LENGTH;
+
+        $key = hash_pbkdf2('sha256', $this->key, $salt, 100_000, 32, true);
+
+        if ($this->useHmac) {
+            $hmac = substr($data, -self::HMAC_LENGTH);
+            $encryptedText = substr($data, $offset, -self::HMAC_LENGTH);
+
+            $hmacKey = hash_pbkdf2('sha256', $this->key, $salt . 'hmac', 100_000, self::HMAC_LENGTH, true);
+            $dataToCheck = substr($data, 0, -self::HMAC_LENGTH);
+            $calculatedHmac = hash_hmac('sha256', $dataToCheck, $hmacKey, true);
+
+            if (!hash_equals($hmac, $calculatedHmac)) {
+                return null; // HMAC check failed
+            }
+        } else {
+            $encryptedText = substr($data, $offset);
+        }
+
         $decryptedText = openssl_decrypt(
             $encryptedText,
             $this->cipherAlgorithm->value,
-            $this->key,
+            $key,
             OPENSSL_RAW_DATA,
             $iv,
             $tag
