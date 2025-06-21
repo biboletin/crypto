@@ -1,0 +1,31 @@
+{
+    "name": "biboletin/crypto",
+    "description": "Crypto class",
+    "type": "library",
+    "license": "MIT",
+    "version": "1.0.0",
+    "autoload": {
+        "psr-4": {
+            "Biboletin\\Crypto\\": "src/"
+        }
+    },
+    "authors": [
+        {
+            "name": "biboletin",
+            "email": "shady_fan@abv.bg"
+        }
+    ],
+    "minimum-stability": "dev",
+    "require": {
+        "biboletin/enum": "dev-main",
+        "ext-openssl": "*",
+        "biboletin/exception": "dev-main"
+    },
+    "require-dev": {
+        "symfony/var-dumper": "8.0.x-dev",
+        "squizlabs/php_codesniffer": "*",
+        "phpstan/phpstan": "2.1.x-dev",
+        "vimeo/psalm": "^7.0@dev",
+        "phpunit/phpunit": "^12"
+    }
+}
