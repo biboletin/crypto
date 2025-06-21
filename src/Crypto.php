@@ -3,6 +3,7 @@
 namespace Biboletin\Crypto;
 
 use Biboletin\Enum\CryptoVersion;
+use Biboletin\Enum\HashAlgorithm;
 use Biboletin\Exceptions\Custom\Crypto\EncryptException;
 use Biboletin\Enum\CipherAlgorithm;
 use InvalidArgumentException;
@@ -107,7 +108,7 @@ class Crypto
         $iv = random_bytes($this->ivLength);
         $tag = '';
 
-        $key = hash_pbkdf2('sha256', $this->key, $salt, 100_000, 32, true);
+        $key = hash_pbkdf2(HashAlgorithm::SHA256->value, $this->key, $salt, 100_000, 32, true);
         $encryptedText = openssl_encrypt(
             $text,
             $this->cipherAlgorithm->value,
@@ -129,7 +130,7 @@ class Crypto
         if ($this->useHmac) {
             // Ensure the HMAC is calculated over the entire formatted string
             $hmacKey = hash_pbkdf2(
-                'sha256',
+                HashAlgorithm::SHA256->value,
                 $this->key,
                 $salt . 'hmac',
                 100_000,
@@ -138,7 +139,7 @@ class Crypto
             );
 
             // HMAC added for integrity
-            $hmac = hash_hmac('sha256', $payload, $hmacKey, true);
+            $hmac = hash_hmac(HashAlgorithm::SHA256->value, $payload, $hmacKey, true);
             $payload .= $hmac;
         }
 
@@ -185,15 +186,22 @@ class Crypto
         $tag = substr($data, $offset, self::TAG_LENGTH);
         $offset += self::TAG_LENGTH;
 
-        $key = hash_pbkdf2('sha256', $this->key, $salt, 100_000, 32, true);
+        $key = hash_pbkdf2(HashAlgorithm::SHA256->value, $this->key, $salt, 100_000, 32, true);
 
         if ($this->useHmac) {
             $hmac = substr($data, -self::HMAC_LENGTH);
             $encryptedText = substr($data, $offset, -self::HMAC_LENGTH);
 
-            $hmacKey = hash_pbkdf2('sha256', $this->key, $salt . 'hmac', 100_000, self::HMAC_LENGTH, true);
+            $hmacKey = hash_pbkdf2(
+                HashAlgorithm::SHA256->value, 
+                $this->key, 
+                $salt . 'hmac', 
+                100_000, 
+                self::HMAC_LENGTH, 
+                true
+            );
             $dataToCheck = substr($data, 0, -self::HMAC_LENGTH);
-            $calculatedHmac = hash_hmac('sha256', $dataToCheck, $hmacKey, true);
+            $calculatedHmac = hash_hmac(HashAlgorithm::SHA256->value, $dataToCheck, $hmacKey, true);
 
             if (!hash_equals($hmac, $calculatedHmac)) {
                 return null; // HMAC check failed

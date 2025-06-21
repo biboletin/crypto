@@ -12,12 +12,12 @@
             "source": {
                 "type": "git",
                 "url": "https://github.com/biboletin/enum.git",
-                "reference": "70e15e2ef77b42435924e67f80f5a593edbe1a22"
+                "reference": "b6b4a0225a87ea584bc5df74f5555f3f5ac64dee"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/biboletin/enum/zipball/70e15e2ef77b42435924e67f80f5a593edbe1a22",
-                "reference": "70e15e2ef77b42435924e67f80f5a593edbe1a22",
+                "url": "https://api.github.com/repos/biboletin/enum/zipball/b6b4a0225a87ea584bc5df74f5555f3f5ac64dee",
+                "reference": "b6b4a0225a87ea584bc5df74f5555f3f5ac64dee",
                 "shasum": ""
             },
             "require-dev": {
@@ -47,9 +47,9 @@
             "description": "Enums",
             "support": {
                 "issues": "https://github.com/biboletin/enum/issues",
-                "source": "https://github.com/biboletin/enum/tree/v0.1.0"
+                "source": "https://github.com/biboletin/enum/tree/main"
             },
-            "time": "2025-06-21T13:17:25+00:00"
+            "time": "2025-06-21T20:36:55+00:00"
         },
         {
             "name": "biboletin/exception",
